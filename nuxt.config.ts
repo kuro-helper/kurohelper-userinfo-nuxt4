@@ -2,7 +2,10 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['vuetify-nuxt-module'],
+  modules: ['@nuxt/eslint', 'vuetify-nuxt-module'],
+  eslint: {
+    checker: true
+  },
   vuetify: {
     moduleOptions: {
       // Keep defaults for stable setup on Nuxt 4.
