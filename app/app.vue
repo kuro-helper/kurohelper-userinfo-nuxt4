@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+
+const route = useRoute()
+const showTagCanvas = computed(() => !route.path.startsWith('/user/'))
 
 const snackbarVisible = ref(false)
 const snackbarMessage = ref('')
@@ -7,8 +10,8 @@ const snackbarColor = ref<'success' | 'error'>('success')
 
 const { isDark, toggleTheme } = useAppTheme()
 
-const onBackgroundTagClick = (tag: { text: string }) => {
-  const userId = tag.text.trim()
+const onBackgroundTagClick = (tag: { text: string; value: string }) => {
+  const userId = tag.value.trim()
   if (!userId) return
 
   snackbarColor.value = 'success'
@@ -21,8 +24,8 @@ const onBackgroundTagClick = (tag: { text: string }) => {
 <template>
   <v-app>
     <NuxtRouteAnnouncer />
-    <UserTagCanvas :dark="isDark" @tag-click="onBackgroundTagClick" />
-    <v-main class="app-main">
+    <UserTagCanvas v-if="showTagCanvas" :dark="isDark" @tag-click="onBackgroundTagClick" />
+    <v-main class="app-main" :class="{ 'app-main--solid': !showTagCanvas }">
       <NuxtPage :is-dark="isDark" :toggle-theme="toggleTheme" />
     </v-main>
 
@@ -39,5 +42,10 @@ const onBackgroundTagClick = (tag: { text: string }) => {
   z-index: 3;
   background: transparent !important;
   pointer-events: none;
+}
+
+.app-main--solid {
+  background: rgb(var(--v-theme-background)) !important;
+  pointer-events: auto;
 }
 </style>

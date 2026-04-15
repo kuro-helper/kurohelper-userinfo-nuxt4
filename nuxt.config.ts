@@ -2,6 +2,13 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
+  runtimeConfig: {
+    public: {
+      // Injected from API_BASE_URL in selected .env file.
+      // @ts-expect-error `process.env` is available in Nuxt config runtime.
+      apiBaseUrl: process.env.API_BASE_URL ?? ''
+    }
+  },
   modules: ['@nuxt/eslint', 'vuetify-nuxt-module'],
   eslint: {
     checker: false

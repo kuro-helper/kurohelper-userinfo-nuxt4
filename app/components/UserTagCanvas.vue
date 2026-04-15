@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-/**
+/*
  * 全螢幕背景：對角漂移的數字膠囊。hover 暫停動畫；click 對外 emit `text` 供路由用。
  * 圖層在 v-main 之下（z-index:2）；上層需設 pointer-events:none 才能把事件傳到膠囊（見下方樣式）。
  */
 
 interface NumberTag {
   id: number
-  text: string
+  label: string
+  value: string
   x: number
   y: number
   width: number
@@ -17,6 +18,15 @@ interface NumberTag {
   vy: number
   opacity: number
   hue: number
+}
+
+interface UserItem {
+  id: string
+  name: string
+}
+
+interface UserApiResponse {
+  data?: UserItem[]
 }
 
 /** 對角線方向：right-top → left-bottom 等，決定出生邊緣與速度正負。 */
@@ -30,10 +40,11 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  tagClick: [payload: { text: string }]
+  tagClick: [payload: { text: string; value: string }]
 }>()
 
 const tags = ref<NumberTag[]>([])
+const apiUsers = ref<UserItem[]>([])
 /** hover 中的膠囊不參與 tick 位移，方便點擊與閱讀。 */
 const pausedTagIds = ref<Set<number>>(new Set())
 let animationId = 0
@@ -43,8 +54,7 @@ let viewportHeight = 0
 /** 單調遞增 id，供 :key 與暫停用 Set 對應，避免列表重排時狀態錯亂。 */
 let counter = 0
 const density = props.density ?? 18
-
-const randomNumberText = () => `${Math.floor(1000 + Math.random() * 9000)}`
+const runtimeConfig = useRuntimeConfig()
 
 /**
  * @param spawnInsideViewport 初次載入在視窗內散佈；出界重生時在視窗外側生成再飛入。
@@ -53,13 +63,23 @@ const buildTag = (
   width: number,
   height: number,
   direction: DirectionMode,
-  spawnInsideViewport = false
+  spawnInsideViewport = false,
+  user: UserItem
 ): NumberTag => {
-  const text = randomNumberText()
-  const textWidth = Math.max(72, text.length * 13)
+  const label = user.name
+  const value = user.id
+  if (!label.length || !value.length) {
+    throw new Error('Tag label and value are required')
+  }
+
+  const n1 = Math.random()
+  const n2 = Math.random()
+  const n3 = Math.random()
+  const n4 = Math.random()
+  const textWidth = Math.max(72, label.length * 13)
   const tagWidth = textWidth + 48
   const tagHeight = 46
-  const speed = 0.78 + Math.random() * 0.75
+  const speed = 0.78 + n1 * 0.75
   const offset = 260
 
   const speedX = speed
@@ -69,30 +89,30 @@ const buildTag = (
     switch (direction) {
       case 'rt-lb':
         return {
-          x: width + Math.random() * offset,
-          y: -tagHeight - Math.random() * offset
+          x: width + n2 * offset,
+          y: -tagHeight - n3 * offset
         }
       case 'lb-rt':
         return {
-          x: -tagWidth - Math.random() * offset,
-          y: height + Math.random() * offset
+          x: -tagWidth - n2 * offset,
+          y: height + n3 * offset
         }
       case 'lt-rb':
         return {
-          x: -tagWidth - Math.random() * offset,
-          y: -tagHeight - Math.random() * offset
+          x: -tagWidth - n2 * offset,
+          y: -tagHeight - n3 * offset
         }
       case 'rb-lt':
         return {
-          x: width + Math.random() * offset,
-          y: height + Math.random() * offset
+          x: width + n2 * offset,
+          y: height + n3 * offset
         }
     }
   }
 
   const outside = spawnOutside()
-  const x = spawnInsideViewport ? Math.random() * Math.max(1, width - tagWidth) : outside.x
-  const y = spawnInsideViewport ? Math.random() * Math.max(1, height - tagHeight) : outside.y
+  const x = spawnInsideViewport ? n2 * Math.max(1, width - tagWidth) : outside.x
+  const y = spawnInsideViewport ? n3 * Math.max(1, height - tagHeight) : outside.y
 
   const velocity = (() => {
     switch (direction) {
@@ -109,15 +129,16 @@ const buildTag = (
 
   return {
     id: counter++,
-    text,
+    label,
+    value,
     x,
     y,
     width: tagWidth,
     height: tagHeight,
     vx: velocity.vx,
     vy: velocity.vy,
-    opacity: 0.42 + Math.random() * 0.33,
-    hue: Math.floor(Math.random() * 360)
+    opacity: 0.42 + n4 * 0.33,
+    hue: Math.floor(n1 * 360)
   }
 }
 
@@ -127,12 +148,47 @@ const updateViewport = () => {
 }
 
 const resetTags = () => {
+  const sourceUsers = apiUsers.value
+  if (sourceUsers.length === 0) {
+    tags.value = []
+    return
+  }
+
   const next: NumberTag[] = []
   for (let i = 0; i < density; i++) {
     const direction = DIRECTIONS[i % DIRECTIONS.length]!
-    next.push(buildTag(viewportWidth, viewportHeight, direction, true))
+    const user = sourceUsers[i % sourceUsers.length]!
+    next.push(buildTag(viewportWidth, viewportHeight, direction, true, user))
   }
   tags.value = next
+}
+
+const fetchUserNumbers = async () => {
+  try {
+    const baseUrl = String(runtimeConfig.public.apiBaseUrl || '').replace(/\/+$/, '')
+    if (!baseUrl) {
+      apiUsers.value = []
+      tags.value = []
+      return
+    }
+
+    const response = await $fetch<UserApiResponse>(`${baseUrl}/api/user`, { method: 'GET' })
+    const nextUsers = (response.data ?? []).filter(
+      (user): user is UserItem =>
+        typeof user?.id === 'string' &&
+        user.id.length > 0 &&
+        typeof user?.name === 'string' &&
+        user.name.length > 0
+    )
+    apiUsers.value = nextUsers
+    if (nextUsers.length === 0) {
+      tags.value = []
+    }
+  } catch (error) {
+    console.warn('[UserTagCanvas] Failed to fetch user numbers from API, no tags will be rendered.', error)
+    apiUsers.value = []
+    tags.value = []
+  }
 }
 
 const tick = () => {
@@ -151,7 +207,7 @@ const tick = () => {
       x + tag.width < -280 || x > width + 280 || y + tag.height < -280 || y > height + 280
 
     if (outOfView) {
-      return buildTag(width, height, direction, false)
+      return buildTag(width, height, direction, false, { id: tag.value, name: tag.label })
     }
 
     return {
@@ -185,7 +241,7 @@ const handleResize = () => {
 }
 
 const handleTagClick = (tag: NumberTag) => {
-  emit('tagClick', { text: tag.text })
+  emit('tagClick', { text: tag.value, value: tag.value })
 }
 
 const pauseTag = (tagId: number) => {
@@ -196,8 +252,9 @@ const resumeTag = (tagId: number) => {
   pausedTagIds.value.delete(tagId)
 }
 
-onMounted(() => {
+onMounted(async () => {
   updateViewport()
+  await fetchUserNumbers()
   resetTags()
   tick()
   window.addEventListener('resize', handleResize)
@@ -234,7 +291,7 @@ onBeforeUnmount(() => {
       @mouseleave="resumeTag(tag.id)"
       @click="handleTagClick(tag)"
     >
-      {{ tag.text }}
+      {{ tag.label }}
     </button>
   </div>
 </template>
