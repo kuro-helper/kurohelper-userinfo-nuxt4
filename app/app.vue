@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 const route = useRoute()
-const showTagCanvas = computed(() => !route.path.startsWith('/user/'))
-
-const snackbarVisible = ref(false)
-const snackbarMessage = ref('')
-const snackbarColor = ref<'success' | 'error'>('success')
+const isSolidPage = computed(() =>
+  route.path.startsWith('/user/')
+)
+const showTagCanvas = computed(() => !isSolidPage.value)
 
 const { isDark, toggleTheme } = useAppTheme()
 
@@ -14,9 +13,6 @@ const onBackgroundTagClick = (tag: { text: string; value: string }) => {
   const userId = tag.value.trim()
   if (!userId) return
 
-  snackbarColor.value = 'success'
-  snackbarMessage.value = `Redirecting to /user/${userId}`
-  snackbarVisible.value = true
   navigateTo(`/user/${encodeURIComponent(userId)}`)
 }
 </script>
@@ -25,13 +21,9 @@ const onBackgroundTagClick = (tag: { text: string; value: string }) => {
   <v-app>
     <NuxtRouteAnnouncer />
     <UserTagCanvas v-if="showTagCanvas" :dark="isDark" @tag-click="onBackgroundTagClick" />
-    <v-main class="app-main" :class="{ 'app-main--solid': !showTagCanvas }">
+    <v-main class="app-main" :class="{ 'app-main--solid': isSolidPage }">
       <NuxtPage :is-dark="isDark" :toggle-theme="toggleTheme" />
     </v-main>
-
-    <v-snackbar v-model="snackbarVisible" :color="snackbarColor" timeout="2200">
-      {{ snackbarMessage }}
-    </v-snackbar>
   </v-app>
 </template>
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { throwApiError } from '~/utils/apiError'
 
 /*
  * 全螢幕背景：對角漂移的數字膠囊。hover 暫停動畫；click 對外 emit `text` 供路由用。
@@ -172,7 +173,10 @@ const fetchUserNumbers = async () => {
       return
     }
 
-    const response = await $fetch<UserApiResponse>(`${baseUrl}/api/user`, { method: 'GET' })
+    const response = await $fetch<UserApiResponse>('/api/user', {
+      baseURL: baseUrl,
+      method: 'GET'
+    })
     const nextUsers = (response.data ?? []).filter(
       (user): user is UserItem =>
         typeof user?.id === 'string' &&
@@ -185,9 +189,7 @@ const fetchUserNumbers = async () => {
       tags.value = []
     }
   } catch (error) {
-    console.warn('[UserTagCanvas] Failed to fetch user numbers from API, no tags will be rendered.', error)
-    apiUsers.value = []
-    tags.value = []
+    throwApiError(error)
   }
 }
 

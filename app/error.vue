@@ -5,9 +5,8 @@ const props = defineProps<{
   error: NuxtError
 }>()
 
-const statusCode = computed(() => props.error?.statusCode ?? 500)
-const title = computed(() => (statusCode.value === 404 ? '找不到頁面' : '發生錯誤'))
-const description = computed(() => props.error?.statusMessage || '請稍後再試一次。')
+const statusCode = computed(() => props.error?.status ?? 500)
+const apiMessage = computed(() => props.error?.statusText || props.error?.message || '請稍後再試一次。')
 
 const goHome = () => {
   clearError({ redirect: '/' })
@@ -19,10 +18,7 @@ const goHome = () => {
     <v-main class="d-flex align-center justify-center error-main">
       <v-card class="error-card pa-4 text-center" width="520" rounded="xl" elevation="12">
         <v-card-title class="text-h4 font-weight-bold mb-2">{{ statusCode }}</v-card-title>
-        <v-card-subtitle class="text-h6 mb-4">{{ title }}</v-card-subtitle>
-        <v-card-text class="mb-4">
-          {{ description }}
-        </v-card-text>
+        <v-card-subtitle class="text-h6 mb-4">{{ apiMessage }}</v-card-subtitle>
         <v-card-actions class="justify-center">
           <v-btn color="primary" variant="flat" prepend-icon="mdi-home" @click="goHome">
             回首頁

@@ -9,25 +9,17 @@ const props = defineProps<{
 const username = ref('')
 const password = ref('')
 const isSubmitting = ref(false)
-const snackbarVisible = ref(false)
-const snackbarMessage = ref('')
-const snackbarColor = ref<'success' | 'error'>('success')
 
 const onLogin = async () => {
-  if (!username.value || !password.value) {
-    snackbarColor.value = 'error'
-    snackbarMessage.value = 'Please enter username and password.'
-    snackbarVisible.value = true
-    return
-  }
+  if (!username.value || !password.value) return
 
   isSubmitting.value = true
   await new Promise(resolve => setTimeout(resolve, 900))
   isSubmitting.value = false
 
-  snackbarColor.value = 'success'
-  snackbarMessage.value = `Mock login success: ${username.value}`
-  snackbarVisible.value = true
+  await navigateTo({
+    path: `/user/${encodeURIComponent(username.value)}`,
+  })
 }
 </script>
 
@@ -77,10 +69,6 @@ const onLogin = async () => {
         </v-btn>
       </v-card-actions>
     </v-card>
-
-    <v-snackbar v-model="snackbarVisible" :color="snackbarColor" timeout="2200">
-      {{ snackbarMessage }}
-    </v-snackbar>
   </div>
 </template>
 
