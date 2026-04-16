@@ -55,7 +55,6 @@ let viewportHeight = 0
 /** 單調遞增 id，供 :key 與暫停用 Set 對應，避免列表重排時狀態錯亂。 */
 let counter = 0
 const density = props.density ?? 18
-const runtimeConfig = useRuntimeConfig()
 
 /**
  * @param spawnInsideViewport 初次載入在視窗內散佈；出界重生時在視窗外側生成再飛入。
@@ -166,15 +165,7 @@ const resetTags = () => {
 
 const fetchUserNumbers = async () => {
   try {
-    const baseUrl = String(runtimeConfig.public.apiBaseUrl || '').replace(/\/+$/, '')
-    if (!baseUrl) {
-      apiUsers.value = []
-      tags.value = []
-      return
-    }
-
     const response = await $fetch<UserApiResponse>('/api/user', {
-      baseURL: baseUrl,
       method: 'GET'
     })
     const nextUsers = (response.data ?? []).filter(

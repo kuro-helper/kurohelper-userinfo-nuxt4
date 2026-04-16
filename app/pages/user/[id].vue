@@ -16,9 +16,7 @@ const props = defineProps<{
 
 const route = useRoute()
 const userId = computed(() => String(route.params.id ?? ''))
-const runtimeConfig = useRuntimeConfig()
 const display = useDisplay()
-const apiBaseUrl = computed(() => String(runtimeConfig.public.apiBaseUrl || '').replace(/\/+$/, ''))
 
 const emptyApiResponse = <T,>(data: T): ApiResponse<T> => ({
   message: '',
@@ -32,11 +30,10 @@ const {
   status: userStatus,
   error: userError
 } = useFetch<ApiResponse<UserItem[]>, FetchErrorLike>('/api/user', {
-  baseURL: apiBaseUrl,
   method: 'GET',
   query: userQuery,
   default: () => emptyApiResponse<UserItem[]>([]),
-  watch: [userId, apiBaseUrl]
+  watch: [userId]
 })
 
 watchEffect(() => {
@@ -61,6 +58,13 @@ const fmtDate = (input?: string | null) => {
   return d.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
+const EROGAMESCAPE_GAME_URL = 'https://erogamescape.dyndns.org/~ap2/ero/toukei_kaiseki/game.php'
+
+const openErogameScapeGame = (gameId: number) => {
+  const url = `${EROGAMESCAPE_GAME_URL}?game=${gameId}`
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 const joinedAt = computed(() => fmtDate(apiUser.value?.createdAt ?? ''))
 const updatedAt = computed(() => fmtDate(apiUser.value?.updatedAt ?? ''))
 const playedErrorMessage = ref('')
@@ -82,10 +86,7 @@ const toStatusCodeMessage = (err: unknown) => {
 }
 
 const fetchUserPlayed = async () => {
-  if (!apiBaseUrl.value) return []
-
   const response = await $fetch<ApiResponse<UserHasPlayedDto[]>>('/api/user/played', {
-    baseURL: apiBaseUrl.value,
     method: 'GET',
     query: { id: userId.value },
     retry: 0
@@ -94,10 +95,7 @@ const fetchUserPlayed = async () => {
 }
 
 const fetchUserWish = async () => {
-  if (!apiBaseUrl.value) return []
-
   const response = await $fetch<ApiResponse<UserInWishDto[]>>('/api/user/wish', {
-    baseURL: apiBaseUrl.value,
     method: 'GET',
     query: { id: userId.value },
     retry: 0
@@ -296,7 +294,12 @@ watchEffect(() => {
                 :key="`${game.gameErogsId}-${game.createdAt}`"
                 rounded="xl"
                 elevation="3"
-                class="game-card d-flex flex-column"
+                class="game-card game-card--clickable d-flex flex-column"
+                role="link"
+                tabindex="0"
+                :aria-label="`在批評空間開啟：${game.gameName}`"
+                @click="openErogameScapeGame(game.gameId)"
+                @keydown.enter.prevent="openErogameScapeGame(game.gameId)"
               >
                 <v-img :src="game.gameimage" height="160" cover class="flex-shrink-0">
                   <template #placeholder>
@@ -369,7 +372,12 @@ watchEffect(() => {
                 :key="`${game.gameErogsId}-${game.createdAt}`"
                 rounded="xl"
                 elevation="3"
-                class="game-card d-flex flex-column"
+                class="game-card game-card--clickable d-flex flex-column"
+                role="link"
+                tabindex="0"
+                :aria-label="`在批評空間開啟：${game.gameName}`"
+                @click="openErogameScapeGame(game.gameId)"
+                @keydown.enter.prevent="openErogameScapeGame(game.gameId)"
               >
                 <v-img :src="game.gameimage" height="160" cover class="flex-shrink-0">
                   <template #placeholder>
@@ -436,6 +444,10 @@ watchEffect(() => {
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   transition: box-shadow 0.2s ease, transform 0.2s ease;
   height: 100%;
+}
+
+.game-card--clickable {
+  cursor: pointer;
 }
 
 .game-card:hover {

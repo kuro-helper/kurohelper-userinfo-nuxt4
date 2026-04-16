@@ -8,26 +8,13 @@ const props = defineProps<{
 
 const username = ref('')
 const password = ref('')
-const isSubmitting = ref(false)
-
-const onLogin = async () => {
-  if (!username.value || !password.value) return
-
-  isSubmitting.value = true
-  await new Promise(resolve => setTimeout(resolve, 900))
-  isSubmitting.value = false
-
-  await navigateTo({
-    path: `/user/${encodeURIComponent(username.value)}`,
-  })
-}
 </script>
 
 <template>
   <div class="page-shell d-flex align-center justify-center">
     <v-card class="login-card pa-2" width="420" rounded="xl" elevation="18">
       <v-card-title class="text-h5 font-weight-bold">Kurohelper使用者登入</v-card-title>
-      <v-card-subtitle class="mb-2">使用Discord帳號ID登入</v-card-subtitle>
+      <v-card-subtitle class="mb-2 login-notice">目前不開放登入</v-card-subtitle>
 
       <v-card-text class="d-flex flex-column ga-4">
         <v-text-field
@@ -37,6 +24,7 @@ const onLogin = async () => {
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          disabled
         />
         <v-text-field
           v-model="password"
@@ -46,11 +34,12 @@ const onLogin = async () => {
           variant="outlined"
           density="comfortable"
           hide-details="auto"
+          disabled
         />
       </v-card-text>
 
       <v-card-actions class="px-4 pb-4 pt-0">
-        <v-btn color="primary" variant="flat" block :loading="isSubmitting" @click="onLogin">
+        <v-btn color="primary" variant="flat" block disabled>
           Sign In
         </v-btn>
       </v-card-actions>
@@ -81,5 +70,11 @@ const onLogin = async () => {
 .login-card {
   backdrop-filter: blur(8px);
   pointer-events: auto;
+}
+
+.login-notice {
+  color: rgb(var(--v-theme-error));
+  font-weight: 700;
+  opacity: 1 !important;
 }
 </style>
