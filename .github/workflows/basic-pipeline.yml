@@ -38,3 +38,7 @@ jobs:
 
       - name: Run lint
         run: yarn lint
+
+  event-send:
+    uses: kuro-helper/.github/.github/workflows/event-send.yml@main
+    secrets: inherit
