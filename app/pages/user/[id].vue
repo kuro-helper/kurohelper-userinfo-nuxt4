@@ -5,17 +5,18 @@ import { throwApiError } from '~/utils/apiError'
 import type {
   ApiResponse,
   FetchErrorLike,
-  UserHasPlayedDto,
-  UserInWishDto,
+  GetUserGameDto,
+  UserGameDto,
   UserItem
 } from '~/types/user-api'
+
 const props = defineProps<{
   isDark?: boolean
   toggleTheme?: () => void
 }>()
 
 const route = useRoute()
-const userId = computed(() => String(route.params.id ?? ''))
+const discordId = computed(() => String(route.params.id ?? ''))
 const display = useDisplay()
 
 const emptyApiResponse = <T,>(data: T): ApiResponse<T> => ({
@@ -23,7 +24,7 @@ const emptyApiResponse = <T,>(data: T): ApiResponse<T> => ({
   data
 })
 
-const userQuery = computed(() => ({ id: userId.value }))
+const userQuery = computed(() => ({ id: discordId.value }))
 const {
   data: userResponse,
   pending: userPending,
@@ -33,7 +34,7 @@ const {
   method: 'GET',
   query: userQuery,
   default: () => emptyApiResponse<UserItem[]>([]),
-  watch: [userId]
+  watch: [discordId]
 })
 
 watchEffect(() => {
@@ -49,8 +50,9 @@ const apiUser = computed(() => {
 
 const userName = computed(() => {
   const apiName = String(apiUser.value?.name ?? '').trim()
-  return apiName || `使用者 ${userId.value}`
+  return apiName || `使用者 ${discordId.value}`
 })
+
 const fmtDate = (input?: string | null) => {
   if (!input) return ''
   const d = new Date(input)
@@ -60,15 +62,18 @@ const fmtDate = (input?: string | null) => {
 
 const EROGAMESCAPE_GAME_URL = 'https://erogamescape.dyndns.org/~ap2/ero/toukei_kaiseki/game.php'
 
-const openErogameScapeGame = (gameId: number) => {
-  const url = `${EROGAMESCAPE_GAME_URL}?game=${gameId}`
+const openErogameScapeGame = (gameErogsId: number) => {
+  const url = `${EROGAMESCAPE_GAME_URL}?game=${gameErogsId}`
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
+const gameName = (game: UserGameDto) => game.gameErogs?.name?.trim() || `Erogs #${game.gameErogsId}`
+const gameImage = (game: UserGameDto) => game.gameErogs?.image?.trim() || ''
+const brandName = (game: UserGameDto) => game.gameErogs?.brandErogs?.name?.trim() || '—'
+
 const joinedAt = computed(() => fmtDate(apiUser.value?.createdAt ?? ''))
 const updatedAt = computed(() => fmtDate(apiUser.value?.updatedAt ?? ''))
-const playedErrorMessage = ref('')
-const wishErrorMessage = ref('')
+const gamesErrorMessage = ref('')
 
 const toStatusCodeMessage = (err: unknown) => {
   const e = err as FetchErrorLike | null | undefined
@@ -85,30 +90,12 @@ const toStatusCodeMessage = (err: unknown) => {
   return `${code}-${message}`
 }
 
-const fetchUserPlayed = async () => {
-  const response = await $fetch<ApiResponse<UserHasPlayedDto[]>>('/api/user/played', {
-    method: 'GET',
-    query: { id: userId.value },
-    retry: 0
-  })
-  return (response.data ?? []) as UserHasPlayedDto[]
-}
-
-const fetchUserWish = async () => {
-  const response = await $fetch<ApiResponse<UserInWishDto[]>>('/api/user/wish', {
-    method: 'GET',
-    query: { id: userId.value },
-    retry: 0
-  })
-  return (response.data ?? []) as UserInWishDto[]
-}
-
 const columns = computed(() => {
   if (display.lgAndUp.value) return 3
   if (display.smAndUp.value) return 2
   return 1
 })
-const pageSize = computed(() => columns.value * 2) // 最多兩排
+const pageSize = computed(() => columns.value * 2)
 
 const chunk = <T,>(items: T[], size: number) => {
   if (size <= 0) return []
@@ -122,73 +109,63 @@ const chunk = <T,>(items: T[], size: number) => {
 const playedPage = ref(0)
 const wishPage = ref(0)
 
-const playedGames = ref<UserHasPlayedDto[]>([])
-const wishGames = ref<UserInWishDto[]>([])
-const playedPending = ref(false)
-const wishPending = ref(false)
+const allGames = ref<UserGameDto[]>([])
+const gamesPending = ref(false)
 
-const playedPages = computed(() => chunk(playedGames.value ?? [], pageSize.value))
+const playedGames = computed(() => allGames.value.filter((game) => game.status === 'finished'))
+const wishGames = computed(() => allGames.value.filter((game) => game.wishListMark))
+
+const playedPages = computed(() => chunk(playedGames.value, pageSize.value))
+const wishPages = computed(() => chunk(wishGames.value, pageSize.value))
+
 watchEffect(() => {
   if (playedPage.value > Math.max(0, playedPages.value.length - 1)) playedPage.value = 0
 })
-
-const loadPlayed = async () => {
-  playedPending.value = true
-  playedErrorMessage.value = ''
-  try {
-    playedGames.value = await fetchUserPlayed()
-  } catch (e) {
-    playedGames.value = []
-    playedErrorMessage.value = toStatusCodeMessage(e)
-  } finally {
-    playedPending.value = false
-  }
-}
-
-const loadWish = async () => {
-  wishPending.value = true
-  wishErrorMessage.value = ''
-  try {
-    wishGames.value = await fetchUserWish()
-  } catch (e) {
-    wishGames.value = []
-    wishErrorMessage.value = toStatusCodeMessage(e)
-  } finally {
-    wishPending.value = false
-  }
-}
-
-const wishPages = computed(() => chunk(wishGames.value ?? [], pageSize.value))
 watchEffect(() => {
   if (wishPage.value > Math.max(0, wishPages.value.length - 1)) wishPage.value = 0
 })
 
-const canFetchRelated = computed(() =>
+const fetchUserGames = async (dbUserId: number) => {
+  const response = await $fetch<ApiResponse<GetUserGameDto>>(`/api/user/${dbUserId}/game`, {
+    method: 'GET',
+    retry: 0
+  })
+  return (response.data?.games ?? []) as UserGameDto[]
+}
+
+const loadGames = async (dbUserId: number) => {
+  gamesPending.value = true
+  gamesErrorMessage.value = ''
+  try {
+    allGames.value = await fetchUserGames(dbUserId)
+  } catch (e) {
+    allGames.value = []
+    gamesErrorMessage.value = toStatusCodeMessage(e)
+  } finally {
+    gamesPending.value = false
+  }
+}
+
+const canFetchGames = computed(() =>
   userStatus.value === 'success' &&
   !!apiUser.value &&
-  apiUser.value.id === userId.value
+  apiUser.value.discordId === discordId.value
 )
-const relatedFetchedForUserId = ref('')
+const gamesFetchedForDiscordId = ref('')
 
 watchEffect(() => {
-  // 強制流程：只有 user 成功且 id 完全對上當前頁面，才抓 played/wish
-  if (canFetchRelated.value) {
-    if (relatedFetchedForUserId.value === userId.value) return
-    // SSR 與 client 各會跑一次 watchEffect，避免同一 API 被請求兩次
+  if (canFetchGames.value && apiUser.value) {
+    if (gamesFetchedForDiscordId.value === discordId.value) return
     if (typeof window === 'undefined') return
 
-    relatedFetchedForUserId.value = userId.value
-    void loadPlayed()
-    void loadWish()
+    gamesFetchedForDiscordId.value = discordId.value
+    void loadGames(apiUser.value.id)
     return
   }
 
-  // 無 user（404、pending、id 不匹配）時，不發送 played/wish 並清空畫面資料
-  relatedFetchedForUserId.value = ''
-  playedGames.value = []
-  wishGames.value = []
-  playedErrorMessage.value = ''
-  wishErrorMessage.value = ''
+  gamesFetchedForDiscordId.value = ''
+  allGames.value = []
+  gamesErrorMessage.value = ''
   playedPage.value = 0
   wishPage.value = 0
 })
@@ -227,7 +204,7 @@ watchEffect(() => {
             <v-row no-gutters class="flex-column flex-md-row">
               <v-col cols="12" md="auto" class="pa-6 pa-md-8 d-flex justify-center bg-surface-variant">
                 <v-avatar size="120" rounded="lg" color="primary" class="text-h3 font-weight-bold">
-                  {{ userId.slice(0, 2) || '?' }}
+                  {{ discordId.slice(0, 2) || '?' }}
                 </v-avatar>
               </v-col>
               <v-col class="pa-6 pa-md-8">
@@ -236,7 +213,7 @@ watchEffect(() => {
                 <v-row density="comfortable">
                   <v-col cols="12" sm="6">
                     <div class="detail-label">Discord / 帳號 ID</div>
-                    <div class="detail-value text-truncate">{{ userId }}</div>
+                    <div class="detail-value text-truncate">{{ discordId }}</div>
                   </v-col>
                   <v-col cols="12" sm="6">
                     <div class="detail-label">註冊日期</div>
@@ -254,156 +231,156 @@ watchEffect(() => {
 
         <!-- 區塊二：遊玩的遊戲 -->
         <section>
-        <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-4">
-          <h2 class="text-h5 font-weight-bold">遊玩的遊戲</h2>
-          <div class="d-flex align-center ga-2">
-            <v-chip v-if="playedPending" size="small" color="primary" variant="tonal">載入中</v-chip>
-            <v-btn
-              icon="mdi-chevron-left"
-              variant="tonal"
-              size="small"
-              rounded="xl"
-              :disabled="playedPage <= 0"
-              @click="playedPage--"
-            />
-            <v-btn
-              icon="mdi-chevron-right"
-              variant="tonal"
-              size="small"
-              rounded="xl"
-              :disabled="playedPage >= playedPages.length - 1"
-              @click="playedPage++"
-            />
-          </div>
-        </div>
-
-        <v-alert
-          v-if="playedErrorMessage"
-          type="error"
-          variant="tonal"
-          density="comfortable"
-          class="mb-2"
-        >
-          {{ playedErrorMessage }}
-        </v-alert>
-        <v-window v-else v-model="playedPage" class="carousel-window" :touch="false">
-          <v-window-item v-for="(page, pageIndex) in playedPages" :key="`played-page-${pageIndex}`">
-            <div class="carousel-grid" :style="{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }">
-              <v-card
-                v-for="game in page"
-                :key="`${game.gameErogsId}-${game.createdAt}`"
+          <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-4">
+            <h2 class="text-h5 font-weight-bold">遊玩的遊戲</h2>
+            <div class="d-flex align-center ga-2">
+              <v-chip v-if="gamesPending" size="small" color="primary" variant="tonal">載入中</v-chip>
+              <v-btn
+                icon="mdi-chevron-left"
+                variant="tonal"
+                size="small"
                 rounded="xl"
-                elevation="3"
-                class="game-card game-card--clickable d-flex flex-column"
-                role="link"
-                tabindex="0"
-                :aria-label="`在批評空間開啟：${game.gameName}`"
-                @click="openErogameScapeGame(game.gameId)"
-                @keydown.enter.prevent="openErogameScapeGame(game.gameId)"
-              >
-                <v-img :src="game.gameimage" height="160" cover class="flex-shrink-0">
-                  <template #placeholder>
-                    <div class="d-flex align-center justify-center fill-height bg-surface-variant">
-                      <v-progress-circular indeterminate color="primary" size="32" />
-                    </div>
-                  </template>
-                </v-img>
-                <v-card-item class="flex-grow-1">
-                  <v-card-title class="game-title pa-0" :title="game.gameName">{{ game.gameName }}</v-card-title>
-                  <v-card-subtitle class="game-subtitle pa-0 mt-2">
-                    <div class="game-brand text-medium-emphasis" :title="game.brandName">{{ game.brandName }}</div>
-                    <div class="game-tags mt-1">
-                      <v-chip size="x-small" color="secondary" variant="tonal">GameID {{ game.gameId }}</v-chip>
-                      <v-chip v-if="game.completedAt" size="x-small" color="success" variant="tonal">
-                        完成 {{ fmtDate(game.completedAt) }}
-                      </v-chip>
-                    </div>
-                  </v-card-subtitle>
-                </v-card-item>
-              </v-card>
+                :disabled="playedPage <= 0"
+                @click="playedPage--"
+              />
+              <v-btn
+                icon="mdi-chevron-right"
+                variant="tonal"
+                size="small"
+                rounded="xl"
+                :disabled="playedPage >= playedPages.length - 1"
+                @click="playedPage++"
+              />
             </div>
-          </v-window-item>
-        </v-window>
+          </div>
 
-        <div v-if="!playedPending && !playedErrorMessage && playedPages.length === 0" class="text-medium-emphasis">
-          目前沒有遊玩資料。
-        </div>
+          <v-alert
+            v-if="gamesErrorMessage"
+            type="error"
+            variant="tonal"
+            density="comfortable"
+            class="mb-2"
+          >
+            {{ gamesErrorMessage }}
+          </v-alert>
+          <v-window v-else v-model="playedPage" class="carousel-window" :touch="false">
+            <v-window-item v-for="(page, pageIndex) in playedPages" :key="`played-page-${pageIndex}`">
+              <div class="carousel-grid" :style="{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }">
+                <v-card
+                  v-for="game in page"
+                  :key="`${game.gameErogsId}-${game.updatedAt}`"
+                  rounded="xl"
+                  elevation="3"
+                  class="game-card game-card--clickable d-flex flex-column"
+                  role="link"
+                  tabindex="0"
+                  :aria-label="`在批評空間開啟：${gameName(game)}`"
+                  @click="openErogameScapeGame(game.gameErogsId)"
+                  @keydown.enter.prevent="openErogameScapeGame(game.gameErogsId)"
+                >
+                  <v-img :src="gameImage(game)" height="160" cover class="flex-shrink-0">
+                    <template #placeholder>
+                      <div class="d-flex align-center justify-center fill-height bg-surface-variant">
+                        <v-progress-circular indeterminate color="primary" size="32" />
+                      </div>
+                    </template>
+                  </v-img>
+                  <v-card-item class="flex-grow-1">
+                    <v-card-title class="game-title pa-0" :title="gameName(game)">{{ gameName(game) }}</v-card-title>
+                    <v-card-subtitle class="game-subtitle pa-0 mt-2">
+                      <div class="game-brand text-medium-emphasis" :title="brandName(game)">{{ brandName(game) }}</div>
+                      <div class="game-tags mt-1">
+                        <v-chip size="x-small" color="secondary" variant="tonal">GameID {{ game.gameErogsId }}</v-chip>
+                        <v-chip v-if="game.finishedDate" size="x-small" color="success" variant="tonal">
+                          完成 {{ fmtDate(game.finishedDate) }}
+                        </v-chip>
+                      </div>
+                    </v-card-subtitle>
+                  </v-card-item>
+                </v-card>
+              </div>
+            </v-window-item>
+          </v-window>
+
+          <div v-if="!gamesPending && !gamesErrorMessage && playedPages.length === 0" class="text-medium-emphasis">
+            目前沒有遊玩完畢的遊戲。
+          </div>
         </section>
 
         <!-- 區塊三：願望清單 -->
         <section class="mt-10">
-        <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-4">
-          <h2 class="text-h5 font-weight-bold">願望清單</h2>
-          <div class="d-flex align-center ga-2">
-            <v-chip v-if="wishPending" size="small" color="primary" variant="tonal">載入中</v-chip>
-            <v-btn
-              icon="mdi-chevron-left"
-              variant="tonal"
-              size="small"
-              rounded="xl"
-              :disabled="wishPage <= 0"
-              @click="wishPage--"
-            />
-            <v-btn
-              icon="mdi-chevron-right"
-              variant="tonal"
-              size="small"
-              rounded="xl"
-              :disabled="wishPage >= wishPages.length - 1"
-              @click="wishPage++"
-            />
-          </div>
-        </div>
-
-        <v-alert
-          v-if="wishErrorMessage"
-          type="error"
-          variant="tonal"
-          density="comfortable"
-          class="mb-2"
-        >
-          {{ wishErrorMessage }}
-        </v-alert>
-        <v-window v-else v-model="wishPage" class="carousel-window" :touch="false">
-          <v-window-item v-for="(page, pageIndex) in wishPages" :key="`wish-page-${pageIndex}`">
-            <div class="carousel-grid" :style="{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }">
-              <v-card
-                v-for="game in page"
-                :key="`${game.gameErogsId}-${game.createdAt}`"
+          <div class="d-flex flex-wrap align-center justify-space-between ga-2 mb-4">
+            <h2 class="text-h5 font-weight-bold">願望清單</h2>
+            <div class="d-flex align-center ga-2">
+              <v-chip v-if="gamesPending" size="small" color="primary" variant="tonal">載入中</v-chip>
+              <v-btn
+                icon="mdi-chevron-left"
+                variant="tonal"
+                size="small"
                 rounded="xl"
-                elevation="3"
-                class="game-card game-card--clickable d-flex flex-column"
-                role="link"
-                tabindex="0"
-                :aria-label="`在批評空間開啟：${game.gameName}`"
-                @click="openErogameScapeGame(game.gameId)"
-                @keydown.enter.prevent="openErogameScapeGame(game.gameId)"
-              >
-                <v-img :src="game.gameimage" height="160" cover class="flex-shrink-0">
-                  <template #placeholder>
-                    <div class="d-flex align-center justify-center fill-height bg-surface-variant">
-                      <v-progress-circular indeterminate color="primary" size="32" />
-                    </div>
-                  </template>
-                </v-img>
-                <v-card-item class="flex-grow-1">
-                  <v-card-title class="game-title pa-0" :title="game.gameName">{{ game.gameName }}</v-card-title>
-                  <v-card-subtitle class="game-subtitle pa-0 mt-2">
-                    <div class="game-brand text-medium-emphasis" :title="game.brandName">{{ game.brandName }}</div>
-                    <div class="game-tags mt-1">
-                      <v-chip size="x-small" color="secondary" variant="tonal">GameID {{ game.gameId }}</v-chip>
-                      <v-chip size="x-small" color="primary" variant="tonal">加入 {{ fmtDate(game.createdAt) }}</v-chip>
-                    </div>
-                  </v-card-subtitle>
-                </v-card-item>
-              </v-card>
+                :disabled="wishPage <= 0"
+                @click="wishPage--"
+              />
+              <v-btn
+                icon="mdi-chevron-right"
+                variant="tonal"
+                size="small"
+                rounded="xl"
+                :disabled="wishPage >= wishPages.length - 1"
+                @click="wishPage++"
+              />
             </div>
-          </v-window-item>
-        </v-window>
+          </div>
 
-        <div v-if="!wishPending && !wishErrorMessage && wishPages.length === 0" class="text-medium-emphasis">
-          目前沒有願望清單資料。
-        </div>
+          <v-alert
+            v-if="gamesErrorMessage"
+            type="error"
+            variant="tonal"
+            density="comfortable"
+            class="mb-2"
+          >
+            {{ gamesErrorMessage }}
+          </v-alert>
+          <v-window v-else v-model="wishPage" class="carousel-window" :touch="false">
+            <v-window-item v-for="(page, pageIndex) in wishPages" :key="`wish-page-${pageIndex}`">
+              <div class="carousel-grid" :style="{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }">
+                <v-card
+                  v-for="game in page"
+                  :key="`${game.gameErogsId}-${game.createdAt}`"
+                  rounded="xl"
+                  elevation="3"
+                  class="game-card game-card--clickable d-flex flex-column"
+                  role="link"
+                  tabindex="0"
+                  :aria-label="`在批評空間開啟：${gameName(game)}`"
+                  @click="openErogameScapeGame(game.gameErogsId)"
+                  @keydown.enter.prevent="openErogameScapeGame(game.gameErogsId)"
+                >
+                  <v-img :src="gameImage(game)" height="160" cover class="flex-shrink-0">
+                    <template #placeholder>
+                      <div class="d-flex align-center justify-center fill-height bg-surface-variant">
+                        <v-progress-circular indeterminate color="primary" size="32" />
+                      </div>
+                    </template>
+                  </v-img>
+                  <v-card-item class="flex-grow-1">
+                    <v-card-title class="game-title pa-0" :title="gameName(game)">{{ gameName(game) }}</v-card-title>
+                    <v-card-subtitle class="game-subtitle pa-0 mt-2">
+                      <div class="game-brand text-medium-emphasis" :title="brandName(game)">{{ brandName(game) }}</div>
+                      <div class="game-tags mt-1">
+                        <v-chip size="x-small" color="secondary" variant="tonal">GameID {{ game.gameErogsId }}</v-chip>
+                        <v-chip size="x-small" color="primary" variant="tonal">加入 {{ fmtDate(game.createdAt) }}</v-chip>
+                      </div>
+                    </v-card-subtitle>
+                  </v-card-item>
+                </v-card>
+              </div>
+            </v-window-item>
+          </v-window>
+
+          <div v-if="!gamesPending && !gamesErrorMessage && wishPages.length === 0" class="text-medium-emphasis">
+            目前沒有願望清單資料。
+          </div>
         </section>
       </template>
     </v-container>
