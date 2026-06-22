@@ -48,6 +48,7 @@ jobs:
       VPS_SSH_PASSWORD: ${{ secrets.VPS_SSH_PASSWORD }}
       VPS_DEPLOY_BASE: ${{ secrets.VPS_DEPLOY_BASE }}
       REPO_NAME: ${{ github.event.repository.name }}
+      OUTPUT_NAME: ${{ format('{0}-{1}', github.event.repository.name, github.ref_name) }}
     steps:
       - name: Download build output
         uses: actions/download-artifact@v4
@@ -63,8 +64,7 @@ jobs:
           SSHPASS: ${{ secrets.VPS_SSH_PASSWORD }}
         run: |
           set -euo pipefail
-          output_name="$(ls -1 dist | head -n 1)"
-          if [ -z "$output_name" ]; then
+          if [ ! -d dist ] || [ -z "$(ls -A dist)" ]; then
             echo "::error::找不到編譯產物"
             exit 1
           fi
@@ -75,14 +75,21 @@ jobs:
           ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
           remote="${VPS_USERNAME}@${VPS_IP}"
 
-          echo "部署 ref：${{ github.ref }} (${{ github.sha }})"
-          echo "上傳產物：$output_name"
-
-          deploy_name="$output_name"
-          if sshpass -e ssh $ssh_opts "$remote" "[ -d '$target_path/$deploy_name' ]"; then
-            deploy_name="${output_name}-$(date -u +%Y%m%d%H%M%S)"
+          if [ -d "dist/${OUTPUT_NAME}" ]; then
+            source_dir="dist/${OUTPUT_NAME}"
+          else
+            source_dir="dist"
           fi
 
-          sshpass -e scp $ssh_opts -r "dist/$output_name" "$remote:$target_path/$deploy_name"
+          deploy_name="${OUTPUT_NAME}"
+          if sshpass -e ssh $ssh_opts "$remote" "[ -d '$target_path/$deploy_name' ]"; then
+            deploy_name="${OUTPUT_NAME}-$(date -u +%Y%m%d%H%M%S)"
+          fi
+
+          echo "部署 ref：${{ github.ref }} (${{ github.sha }})"
+          echo "上傳產物：${source_dir}/ -> ${target_path}/${deploy_name}/"
+
+          sshpass -e ssh $ssh_opts "$remote" "mkdir -p '$target_path/$deploy_name'"
+          sshpass -e scp $ssh_opts -r "${source_dir}/." "$remote:$target_path/$deploy_name/"
 
           echo "已部署 $deploy_name ($REPO_NAME)"
