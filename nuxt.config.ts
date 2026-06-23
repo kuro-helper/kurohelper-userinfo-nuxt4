@@ -3,11 +3,11 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   runtimeConfig: {
-    // Server-only runtime config. Do not expose in `public`.
-    apiBaseUrl: process.env.API_BASE_URL ?? '',
-    apiToken: process.env.API_TOKEN ?? '',
-    public: {
-    }
+    // runtimeConfig.apiBaseUrl ← NUXT_API_BASE_URL
+    // runtimeConfig.apiToken   ← NUXT_API_TOKEN
+    apiBaseUrl: '',
+    apiToken: '',
+    public: {},
   },
   modules: ['@nuxt/eslint', 'vuetify-nuxt-module'],
   eslint: {
