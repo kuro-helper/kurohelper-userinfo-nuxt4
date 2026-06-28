@@ -34,7 +34,7 @@ export type UserGameErogsDto = {
 export type UserGameDto = {
   userId: number
   gameErogsId: number
-  status: string
+  status: number
   wishListMark: boolean
   blackListMark: boolean
   startDate?: string | null

@@ -2,6 +2,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useDisplay } from 'vuetify'
 import { throwApiError } from '~/utils/apiError'
+import { isUserGameFinished } from '~/utils/userGameStatus'
 import type {
   ApiResponse,
   FetchErrorLike,
@@ -112,7 +113,7 @@ const wishPage = ref(0)
 const allGames = ref<UserGameDto[]>([])
 const gamesPending = ref(false)
 
-const playedGames = computed(() => allGames.value.filter((game) => game.status === 'finished'))
+const playedGames = computed(() => allGames.value.filter((game) => isUserGameFinished(game.status)))
 const wishGames = computed(() => allGames.value.filter((game) => game.wishListMark))
 
 const playedPages = computed(() => chunk(playedGames.value, pageSize.value))
