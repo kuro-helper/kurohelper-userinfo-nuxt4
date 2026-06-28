@@ -50,7 +50,7 @@ const apiUser = computed(() => {
 })
 
 const userName = computed(() => {
-  const apiName = String(apiUser.value?.name ?? '').trim()
+  const apiName = String(apiUser.value?.nickName ?? '').trim()
   return apiName || `使用者 ${discordId.value}`
 })
 

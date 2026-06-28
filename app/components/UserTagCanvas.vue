@@ -23,7 +23,7 @@ interface NumberTag {
 
 interface UserItem {
   id: number
-  name: string
+  nickName: string
   discordId: string
 }
 
@@ -67,7 +67,7 @@ const buildTag = (
   spawnInsideViewport = false,
   user: UserItem
 ): NumberTag => {
-  const label = user.name
+  const label = user.nickName
   const value = user.discordId
   if (!label.length || !value.length) {
     throw new Error('Tag label and value are required')
@@ -173,8 +173,8 @@ const fetchUserNumbers = async () => {
       (user): user is UserItem =>
         typeof user?.discordId === 'string' &&
         user.discordId.length > 0 &&
-        typeof user?.name === 'string' &&
-        user.name.length > 0
+        typeof user?.nickName === 'string' &&
+        user.nickName.length > 0
     )
     apiUsers.value = nextUsers
     if (nextUsers.length === 0) {
@@ -201,7 +201,7 @@ const tick = () => {
       x + tag.width < -280 || x > width + 280 || y + tag.height < -280 || y > height + 280
 
     if (outOfView) {
-      return buildTag(width, height, direction, false, { id: 0, name: tag.label, discordId: tag.value })
+      return buildTag(width, height, direction, false, { id: 0, nickName: tag.label, discordId: tag.value })
     }
 
     return {
