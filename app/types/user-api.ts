@@ -5,7 +5,7 @@ export type ApiResponse<T> = {
 
 export type UserItem = {
   id: number
-  name: string
+  nickName: string
   discordId: string
   role: number
   createdAt: string
@@ -46,7 +46,8 @@ export type UserGameDto = {
 
 export type UserProfileDto = {
   id: number
-  name: string
+  userName?: string
+  nickName: string
   discordId: string
   avatar: string
   description: string
